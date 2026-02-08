@@ -1,0 +1,17 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\.next",
+    "\\app",
+    "\\app\\doctor",
+    "\\app\\patient",
+    "\\app\\pharma",
+    "\\app\\utils",
+    "\\Local settings (.vs)",
+    "\\Local settings (.vs)\\medi-connect",
+    "\\Local settings (.vs)\\medi-connect\\v17",
+    "\\node_modules"
+  ],
+  "SelectedNode": "\\app\\doctor\\page.tsx",
+  "PreviewInSolutionExplorer": false
+}
