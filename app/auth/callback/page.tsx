@@ -1,21 +1,20 @@
 'use client'
 import { useEffect } from 'react'
-import { supabase } from '../../../utils/supabaseClient'
+// ✅ FIXED PATH BELOW (Only two ../)
+import { supabase } from '../../utils/supabaseClient'
 import { useRouter } from 'next/navigation'
 
 export default function AuthCallback() {
   const router = useRouter()
 
   useEffect(() => {
-    // This handles the "magic" code Google sends back
     const handleAuth = async () => {
       const { data: { session }, error } = await supabase.auth.getSession()
       
       if (error) {
         console.error('Login error:', error)
-        router.push('/') // Send back to login on error
+        router.push('/')
       } else if (session) {
-        // Login successful! Now find out who they are.
         checkUserRole(session.user.email!)
       }
     }
@@ -23,16 +22,13 @@ export default function AuthCallback() {
   }, [])
 
   const checkUserRole = async (email: string) => {
-    // 1. Check if they are in our 'Users' table
     const { data: userData } = await supabase.from('Users').select('role').eq('email', email).single()
 
     if (userData?.role) {
-      // 2. Redirect to correct dashboard
       if (userData.role === 'doctor') router.push('/doctor')
       else if (userData.role === 'pharmacist') router.push('/pharma')
       else router.push('/patient')
     } else {
-      // 3. New Google user? Send to Signup to pick a role
       router.push('/signup') 
     }
   }
