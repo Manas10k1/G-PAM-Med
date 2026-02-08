@@ -1,254 +1,160 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { supabase } from '../utils/supabaseClient'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { Mail, Lock, User, Shield, AlertCircle, Loader2 } from 'lucide-react'
 
-export default function SignUp() {
+export default function Signup() {
   const router = useRouter()
-  
-  // Basic Info
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('') 
+  const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
-  const [role, setRole] = useState<'patient' | 'doctor' | 'pharma'>('patient')
+  const [role, setRole] = useState<'patient' | 'doctor' | 'pharmacist'>('patient')
   const [loading, setLoading] = useState(false)
 
-  // Doctor Specifics
-  const [qualifications, setQualifications] = useState('')
-  const [hospital, setHospital] = useState('')
-  const [address, setAddress] = useState('')
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const handleImageChange = (e: any) => {
-    const file = e.target.files[0]
-    if (file) {
-      setImageFile(file)
-      setImagePreview(URL.createObjectURL(file))
-    }
-  }
-
-  // --- NEW: GOOGLE SIGN IN ---
-  const handleGoogleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/patient`, // Default redirect to patient dashboard
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
-      },
-    })
-    if (error) alert(error.message)
-  }
-
-  const handleSignUp = async (e: any) => {
+  const handleSignup = async (e: any) => {
     e.preventDefault()
     setLoading(true)
 
     try {
-      const { data: existingUser } = await supabase.from('Users').select('email').eq('email', email).single()
+      // 1. Create User in Supabase Auth (Secure)
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName, role: role }, // Meta data
+        },
+      })
 
-      if (existingUser) {
-        alert("User already exists! Please log in instead.")
-        setLoading(false)
-        return
+      if (authError) throw authError
+
+      // 2. Add to Public 'Users' Table (WITHOUT PASSWORD)
+      if (authData.user) {
+        const { error: dbError } = await supabase.from('Users').insert([
+          { 
+            email: email, 
+            Full_name: fullName, 
+            role: role 
+            // ❌ Removed 'password' field from here to fix your error
+          }
+        ])
+        if (dbError) throw dbError
       }
 
-      const { error: userError } = await supabase.from('Users').insert({
-          email,
-          password,
-          Full_name: fullName,
-          role
-        })
-
-      if (userError) throw userError
-
-      if (role === 'doctor') {
-        let imageUrl = ''
-        if (imageFile) {
-          const fileExt = imageFile.name.split('.').pop()
-          const fileName = `doc_${Date.now()}.${fileExt}`
-          const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, imageFile)
-          if (uploadError) throw uploadError
-          const { data } = supabase.storage.from('avatars').getPublicUrl(fileName)
-          imageUrl = data.publicUrl
-        }
-
-        const { error: profileError } = await supabase.from('doctor_profiles').insert({
-            email,
-            full_name: fullName, 
-            qualifications,
-            hospital_name: hospital,
-            address,
-            image_url: imageUrl
-          })
-
-        if (profileError) throw profileError
-      }
-
-      alert("Account Created Successfully! 🎉")
-      
-      if (role === 'doctor') router.push('/doctor')
-      else if (role === 'patient') router.push('/patient')
-      else router.push('/pharma')
+      alert('Account created! Please Log In.')
+      router.push('/')
 
     } catch (error: any) {
-      alert("Error: " + error.message)
+      alert(error.message)
     } finally {
       setLoading(false)
     }
   }
 
+  const handleGoogleSignup = async () => {
+    // This requires your Vercel URL to be added to Supabase
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+  }
+
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f0f2f5', fontFamily: 'Arial, sans-serif' }}>
-      
-      <div style={{ backgroundColor: 'white', padding: '40px', borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', width: '100%', maxWidth: '500px' }}>
+    <div className="min-h-screen bg-[#0a0a0a] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-[#0a0a0a] to-black flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-black/40 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl relative overflow-hidden">
         
-        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-          <h1 style={{ margin: 0, color: '#333' }}>Create Account</h1>
-          <p style={{ color: '#666', marginTop: '5px' }}>Join our medical network</p>
+        {/* Background Glow */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-violet-500/20 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div className="text-center mb-8 relative z-10">
+          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">Join MediConnect</h1>
+          <p className="text-gray-500 text-sm mt-2">Create your secure medical identity</p>
         </div>
 
-        {/* --- GOOGLE BUTTON --- */}
-        <button
-          onClick={handleGoogleLogin}
-          style={{
-            width: '100%',
-            padding: '12px',
-            backgroundColor: 'white',
-            color: '#333',
-            border: '1px solid #ccc',
-            borderRadius: '8px',
-            fontSize: '15px',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '10px',
-            marginBottom: '20px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-          }}
+        {/* Role Selection */}
+        <div className="grid grid-cols-3 gap-2 mb-6 p-1 bg-white/5 rounded-xl">
+          {['patient', 'doctor', 'pharmacist'].map((r) => (
+            <button
+              key={r}
+              onClick={() => setRole(r as any)}
+              className={`py-2 text-xs font-bold uppercase rounded-lg transition-all duration-300 ${
+                role === r 
+                  ? 'bg-violet-600 text-white shadow-lg' 
+                  : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'
+              }`}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+
+        <button 
+          onClick={handleGoogleSignup}
+          className="w-full bg-white text-black font-bold py-3 rounded-xl mb-6 flex items-center justify-center gap-2 hover:bg-gray-100 transition-colors"
         >
-          <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" style={{ width: '20px', height: '20px' }} />
+          <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" /><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" /><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" /><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" /></svg>
           Sign up with Google
         </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', margin: '20px 0', color: '#888' }}>
-          <div style={{ flex: 1, height: '1px', backgroundColor: '#ddd' }}></div>
-          <span style={{ padding: '0 10px', fontSize: '12px' }}>OR</span>
-          <div style={{ flex: 1, height: '1px', backgroundColor: '#ddd' }}></div>
+        <div className="flex items-center gap-4 mb-6">
+          <div className="h-px bg-white/10 flex-1"></div>
+          <span className="text-xs text-gray-500 font-medium">OR EMAIL</span>
+          <div className="h-px bg-white/10 flex-1"></div>
         </div>
 
-        <form onSubmit={handleSignUp} style={{ display: 'grid', gap: '20px' }}>
-
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '10px' }}>
-            {['patient', 'doctor', 'pharma'].map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRole(r as any)}
-                style={{
-                  padding: '10px 20px',
-                  borderRadius: '20px',
-                  border: role === r ? '2px solid #0070f3' : '1px solid #ddd',
-                  backgroundColor: role === r ? '#eaf4ff' : 'white',
-                  color: role === r ? '#0070f3' : '#666',
-                  fontWeight: 'bold',
-                  textTransform: 'capitalize',
-                  cursor: 'pointer'
-                }}
-              >
-                {r === 'pharma' ? 'Pharmacist' : r}
-              </button>
-            ))}
+        <form onSubmit={handleSignup} className="space-y-4">
+          <div className="relative group">
+            <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-violet-400 transition-colors" size={18} />
+            <input 
+              type="text" 
+              placeholder="Full Name" 
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="w-full bg-black/50 border border-white/10 text-white pl-12 pr-4 py-3.5 rounded-xl focus:outline-none focus:border-violet-500 transition-colors placeholder:text-gray-600"
+              required 
+            />
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', marginBottom: '5px' }}>Full Name</label>
-            <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} required style={inputStyle} placeholder="e.g. Tony Stark" />
+          <div className="relative group">
+            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-violet-400 transition-colors" size={18} />
+            <input 
+              type="email" 
+              placeholder="Email Address" 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-black/50 border border-white/10 text-white pl-12 pr-4 py-3.5 rounded-xl focus:outline-none focus:border-violet-500 transition-colors placeholder:text-gray-600"
+              required 
+            />
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', marginBottom: '5px' }}>Email Address</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required style={inputStyle} placeholder="name@example.com" />
+          <div className="relative group">
+            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-violet-400 transition-colors" size={18} />
+            <input 
+              type="password" 
+              placeholder="Password" 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-black/50 border border-white/10 text-white pl-12 pr-4 py-3.5 rounded-xl focus:outline-none focus:border-violet-500 transition-colors placeholder:text-gray-600"
+              required 
+            />
           </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', marginBottom: '5px' }}>Password</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required style={inputStyle} placeholder="••••••••" />
-          </div>
-
-          {role === 'doctor' && (
-            <div style={{ padding: '20px', backgroundColor: '#f9f9f9', borderRadius: '8px', border: '1px solid #eee', animation: 'fadeIn 0.3s' }}>
-              <h4 style={{ margin: '0 0 15px 0', color: '#0070f3' }}>👨‍⚕️ Doctor Profile Setup</h4>
-              
-              <div style={{ textAlign: 'center', marginBottom: '15px' }}>
-                <div 
-                  onClick={() => fileInputRef.current?.click()}
-                  style={{ 
-                    width: '100px', height: '100px', borderRadius: '50%', backgroundColor: '#eee', 
-                    margin: '0 auto', cursor: 'pointer', overflow: 'hidden', border: '2px dashed #ccc',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}
-                >
-                  {imagePreview ? (
-                    <img src={imagePreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <span style={{ fontSize: '30px', color: '#999' }}>📷</span>
-                  )}
-                </div>
-                <p style={{ fontSize: '11px', color: '#666', marginTop: '5px' }}>Tap to upload photo</p>
-                <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/*" style={{ display: 'none' }} />
-              </div>
-
-              <div style={{ display: 'grid', gap: '15px' }}>
-                <input type="text" placeholder="Qualifications (e.g. MBBS, MD)" value={qualifications} onChange={e => setQualifications(e.target.value)} style={inputStyle} />
-                <input type="text" placeholder="Hospital / Clinic Name" value={hospital} onChange={e => setHospital(e.target.value)} style={inputStyle} />
-                <input type="text" placeholder="Clinic Address" value={address} onChange={e => setAddress(e.target.value)} style={inputStyle} />
-              </div>
-            </div>
-          )}
 
           <button 
             type="submit" 
             disabled={loading}
-            style={{ 
-              marginTop: '10px', 
-              padding: '15px', 
-              backgroundColor: loading ? '#ccc' : '#0070f3', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '8px', 
-              fontSize: '16px', 
-              fontWeight: 'bold', 
-              cursor: loading ? 'not-allowed' : 'pointer' 
-            }}
+            className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-violet-500/20 hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
           >
-            {loading ? 'Creating Account...' : 'Sign Up & Get Started'}
+            {loading ? <Loader2 className="animate-spin" size={20}/> : 'Create Account'}
           </button>
-
         </form>
 
-        <p style={{ textAlign: 'center', fontSize: '13px', marginTop: '20px', color: '#666' }}>
-          Already have an account? <Link href="/" style={{ color: '#0070f3', fontWeight: 'bold' }}>Log In</Link>
+        <p className="text-center text-gray-500 text-sm mt-6">
+          Already have an account? <Link href="/" className="text-violet-400 hover:text-white font-medium transition-colors">Log In</Link>
         </p>
-
       </div>
-      <style jsx global>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
     </div>
   )
-}
-
-const inputStyle = {
-  width: '100%',
-  padding: '12px',
-  borderRadius: '6px',
-  border: '1px solid #ccc',
-  fontSize: '14px',
-  outline: 'none'
 }
