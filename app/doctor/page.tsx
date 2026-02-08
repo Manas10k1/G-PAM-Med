@@ -21,7 +21,7 @@ import {
 } from 'lucide-react'
 
 // ---------------------------------------------------------
-// 🔴 PASTE YOUR API KEY HERE
+// 🔴 ENVIRONMENT VARIABLE FOR API KEY
 const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || ""
 // ---------------------------------------------------------
 
@@ -53,6 +53,7 @@ export default function DoctorDashboard() {
   // Profile
   const [profile, setProfile] = useState({ full_name: '', qualifications: '', hospital_name: '', address: '', image_url: '' })
   const [profileLoading, setProfileLoading] = useState(false)
+  const [uploading, setUploading] = useState(false) // <--- THIS WAS MISSING
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [imageError, setImageError] = useState(false)
 
@@ -102,8 +103,8 @@ export default function DoctorDashboard() {
     const symptomsList = selectedSymptoms.join(', ')
     if (!symptomsList) { alert("Please select symptoms."); return }
     
-    if (!API_KEY || API_KEY.includes("PASTE")) {
-        alert("⚠️ API Key Missing! Please paste it in app/doctor/page.tsx (Line 26)."); return
+    if (!API_KEY) {
+        alert("⚠️ API Key Missing! Check your .env.local file."); return
     }
 
     setAiLoading(true); setChatMessages([])
@@ -117,18 +118,16 @@ export default function DoctorDashboard() {
 
     try {
       // 1. Fetch available models dynamically
-      const listReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`)
-      const listData = await listReq.json()
-      
-      // Default fallback list
       let validModels = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
-
-      if (listData && listData.models) {
-        // Filter for valid text models
-        validModels = listData.models
-          .map((m: any) => m.name.replace('models/', ''))
-          .filter((name: string) => (name.includes('flash') || name.includes('pro')) && !name.includes('vision'))
-      }
+      try {
+          const listReq = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`)
+          const listData = await listReq.json()
+          if (listData && listData.models) {
+            validModels = listData.models
+              .map((m: any) => m.name.replace('models/', ''))
+              .filter((name: string) => (name.includes('flash') || name.includes('pro')) && !name.includes('vision'))
+          }
+      } catch (e) { console.log("Using default models") }
 
       // 2. Try models one by one
       let success = false
@@ -149,7 +148,6 @@ export default function DoctorDashboard() {
           const result = await chat.sendMessage(`Patient presents with: ${symptomsList}. Diagnosis & treatment?`)
           const response = result.response.text(); 
           
-          // Save session & update UI
           chatSessionRef.current = chat; 
           setChatMessages([ { role: 'user', text: `Symptoms: ${symptomsList}` }, { role: 'model', text: response } ]); 
           success = true 
@@ -158,7 +156,7 @@ export default function DoctorDashboard() {
         }
       }
 
-      if (!success) throw new Error("All AI models failed. Please check your API Quota.")
+      if (!success) throw new Error("All AI models failed.")
 
     } catch (e: any) { alert(e.message) }
     setAiLoading(false)
